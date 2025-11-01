@@ -1,0 +1,38 @@
+# =======================
+# Python cache
+# =======================
+__pycache__/
+*.pyc
+*.pyo
+
+# =======================
+# Virtual environments
+# =======================
+.venv/
+env/
+venv/
+
+# =======================
+# Build artifacts
+# =======================
+whisper.cpp/build/
+build/
+dist/
+
+# =======================
+# Git
+# =======================
+.git/
+.gitignore
+
+# =======================
+# OS-specific junk
+# =======================
+.DS_Store
+Thumbs.db
+
+# =======================
+# Runtime / secrets
+# =======================
+cookies.txt      # mount at runtime instead of baking into image
+.env             # never bake sensitive env vars into image
