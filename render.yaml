@@ -1,3 +1,25 @@
+# Use an Environment Group to define Redis connection details once.
+envVarGroups:
+  - name: redis-config
+    envVars:
+      - key: REDIS_HOST
+        fromService:
+          type: pserv
+          name: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: pserv
+          name: redis
+          property: port
+      # Construct the full URLs using the host and port defined above.
+      - key: CELERY_BROKER_URL
+        value: redis://${REDIS_HOST}:${REDIS_PORT}/0
+      - key: CELERY_RESULT_BACKEND
+        value: redis://${REDIS_HOST}:${REDIS_PORT}/1
+      - key: REDIS_URL
+        value: redis://${REDIS_HOST}:${REDIS_PORT}/0
+
 services:
   # 1. The Redis Instance (Private Service)
   - type: pserv
@@ -13,30 +35,16 @@ services:
     name: backend
     env: python
     plan: free
+    # Reference the environment group.
+    envVarGroups:
+      - redis-config
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: pserv
-          name: redis
-          # ✅ FIX: Use the correct property for internal connections
-          property: internalConnectionString
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: pserv
-          name: redis
-          # ✅ FIX: Use the correct property for internal connections
-          property: internalConnectionString
-      - key: REDIS_URL
-        fromService:
-          type: pserv
-          name: redis
-          # ✅ FIX: Use the correct property for internal connections
-          property: internalConnectionString
+      # This unique variable stays here.
       - key: CLIENT_ORIGIN
         value: "https://your-frontend-url.onrender.com" # Placeholder
 
@@ -45,29 +53,11 @@ services:
     name: worker
     env: python
     plan: free
+    # Reference the same environment group.
+    envVarGroups:
+      - redis-config
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A celery_app.celery_app worker -l info --concurrency=4
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: pserv
-          name: redis
-          # ✅ FIX: Use the correct property for internal connections
-          property: internalConnectionString
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: pserv
-          name: redis
-          # ✅ FIX: Use the correct property for internal connections
-          property: internalConnectionString
-      - key: REDIS_URL
-        fromService:
-          type: pserv
-          name: redis
-          # ✅ FIX: Use the correct property for internal connections
-          property: internalConnectionString
-
-# ✅ FIX: Removed the entire cron job definition as it does not have a free plan.
-# The cookie refresh logic will now run on-demand, which works perfectly.
