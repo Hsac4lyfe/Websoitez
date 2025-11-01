@@ -1,0 +1,76 @@
+services:
+  # 1. The Redis Instance (Private Service)
+  # This provides the message broker and result backend for Celery.
+  - type: pserv
+    name: redis
+    env: docker
+    image:
+      url: redis:7
+    plan: free
+    autoDeploy: false # No need to redeploy redis on code changes
+
+  # 2. The FastAPI Backend (Web Service)
+  # This is the public-facing API that the frontend talks to.
+  - type: web
+    name: backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: pserv
+          name: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: pserv
+          name: redis
+          property: connectionString
+      - key: REDIS_URL # For the cookie lock in celery_app.py
+        fromService:
+          type: pserv
+          name: redis
+          property: connectionString
+      # IMPORTANT: You will set this manually in the Render Dashboard
+      # after you deploy your frontend static site.
+      - key: CLIENT_ORIGIN
+        value: "https://your-frontend-url.onrender.com"
+
+  # 3. The Celery Worker (Background Worker)
+  # This service does the actual work of downloading and transcribing videos.
+  - type: worker
+    name: worker
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A celery_app.celery_app worker -l info --concurrency=4 # Lower concurrency for free tier
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: pserv
+          name: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: pserv
+          name: redis
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: pserv
+          name: redis
+          property: connectionString
+
+# 4. The Celery Beat Replacement (Cron Job)
+# This runs the cookie refresh task on a schedule without needing a service to be running 24/7.
+cronJobs:
+  - name: beat-cookie-refresh
+    schedule: "0 */12 * * *" # Runs every 12 hours
+    command: celery -A celery_app.celery_app call celery_app.refresh_cookies_task
