@@ -1,4 +1,5 @@
-# Use an Environment Group to define Redis connection details once.
+# Define an Environment Group at the top level to store our Redis config.
+# This prevents repetition and makes the file cleaner.
 envVarGroups:
   - name: redis-config
     envVars:
@@ -12,7 +13,7 @@ envVarGroups:
           type: pserv
           name: redis
           property: port
-      # Construct the full URLs using the host and port defined above.
+      # Build the full URLs using the host and port defined above.
       - key: CELERY_BROKER_URL
         value: redis://${REDIS_HOST}:${REDIS_PORT}/0
       - key: CELERY_RESULT_BACKEND
@@ -35,16 +36,15 @@ services:
     name: backend
     env: python
     plan: free
-    # Reference the environment group.
-    envVarGroups:
-      - redis-config
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:
+      # ✅ FIX: Link the environment group using 'fromGroup' inside the 'envVars' block.
+      - fromGroup: redis-config
+      # Service-specific environment variables are listed here as usual.
       - key: PYTHON_VERSION
         value: "3.11"
-      # This unique variable stays here.
       - key: CLIENT_ORIGIN
         value: "https://your-frontend-url.onrender.com" # Placeholder
 
@@ -53,11 +53,11 @@ services:
     name: worker
     env: python
     plan: free
-    # Reference the same environment group.
-    envVarGroups:
-      - redis-config
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A celery_app.celery_app worker -l info --concurrency=4
     envVars:
+      # ✅ FIX: Link the environment group using 'fromGroup' inside the 'envVars' block.
+      - fromGroup: redis-config
+      # Service-specific environment variables are listed here as usual.
       - key: PYTHON_VERSION
         value: "3.11"
