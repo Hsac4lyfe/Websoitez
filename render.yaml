@@ -1,14 +1,15 @@
 services:
-  # 1. A Render-Managed Redis Instance (Correct Approach)
+  # 1. A Render-Managed Redis Instance
   - type: redis
     name: redis
     plan: free
-    # FIX: Add an IP Allow List so the api and worker can connect.
+    # ✅ FIX: Correct the syntax for the IP Allow List.
+    # 'source' is the correct key, and 'type' and 'name' are at the same level.
     ipAllowList:
-      - from:
+      - source:
           type: service
           name: api
-      - from:
+      - source:
           type: service
           name: worker
 
@@ -18,26 +19,24 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    # FIX: 'startCommand' is invalid for 'env: docker'. The Dockerfile's
-    # default CMD ["uvicorn", ...] will be used, which is correct for the api.
+    # The Dockerfile's default CMD will correctly start the uvicorn server.
     envVars:
       - key: PORT # Render requires this for web services
         value: 5000
       - key: CELERY_BROKER_URL
         fromService:
-          name: redis
-          # FIX: The service type is 'redis' and the property is 'connectionString'
           type: redis
+          name: redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
         fromService:
-          name: redis
           type: redis
+          name: redis
           property: connectionString
       - key: REDIS_URL
         fromService:
-          name: redis
           type: redis
+          name: redis
           property: connectionString
       - key: USE_BROWSER_COOKIES
         value: false # No browser in the container
@@ -54,25 +53,24 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    # FIX: Use 'dockerCommand' to override the Dockerfile's CMD for this specific service.
-    # This cleverly runs both the worker and the beat scheduler in one container.
+    # Use 'dockerCommand' to override the Dockerfile's CMD and run worker+beat.
     dockerCommand: >
       celery -A celery_app.celery_app worker -l info --concurrency=4 -B --scheduler celery.beat.PersistentScheduler --schedule-filename /tmp/celerybeat-schedule
     envVars:
       - key: CELERY_BROKER_URL
         fromService:
-          name: redis
           type: redis
+          name: redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
         fromService:
-          name: redis
           type: redis
+          name: redis
           property: connectionString
       - key: REDIS_URL
         fromService:
-          name: redis
           type: redis
+          name: redis
           property: connectionString
       - key: USE_BROWSER_COOKIES
         value: false
