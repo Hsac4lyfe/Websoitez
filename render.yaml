@@ -1,13 +1,9 @@
 services:
-  # 1. A Render-Managed Redis Instance
+  # 1. A Render-Managed Redis Instance.
+  # No ipAllowList is needed for internal service-to-service communication.
   - type: redis
     name: redis
     plan: free
-    # ✅ FINAL FIX: For a managed Redis service, the 'source' key expects the
-    # name of the other service as a simple string. This is the correct syntax.
-    ipAllowList:
-      - source: api
-      - source: worker
 
   # 2. The FastAPI Web Service (using Docker)
   - type: web
