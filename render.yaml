@@ -1,59 +1,78 @@
-# render.yaml
 services:
+  # 1. A Render-Managed Redis Instance (Correct Approach)
   - type: redis
     name: redis
-    plan: free          # 25 MB, 0 $
+    plan: free
+    # FIX: Add an IP Allow List so the api and worker can connect.
+    ipAllowList:
+      - from:
+          type: service
+          name: api
+      - from:
+          type: service
+          name: worker
 
+  # 2. The FastAPI Web Service (using Docker)
   - type: web
     name: api
     env: docker
-    plan: free          # sleeps after 15 min
+    plan: free
     dockerfilePath: ./Dockerfile
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    # FIX: 'startCommand' is invalid for 'env: docker'. The Dockerfile's
+    # default CMD ["uvicorn", ...] will be used, which is correct for the api.
     envVars:
-      - key: PORT
+      - key: PORT # Render requires this for web services
         value: 5000
       - key: CELERY_BROKER_URL
         fromService:
           name: redis
+          # FIX: The service type is 'redis' and the property is 'connectionString'
+          type: redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
         fromService:
           name: redis
+          type: redis
           property: connectionString
       - key: REDIS_URL
         fromService:
           name: redis
+          type: redis
           property: connectionString
       - key: USE_BROWSER_COOKIES
-        value: false        # no browser in container
+        value: false # No browser in the container
       - key: WHISPER_THREADS
-        value: 1            # 512 MB RAM limit
+        value: 1 # Stay within the 512MB RAM limit
       - key: MAX_CONCURRENT
         value: 4
       - key: CLIENT_ORIGIN
-        value: "*"          # lock later if you add a front-end
+        value: "https://your-frontend-url.onrender.com" # Placeholder
 
+  # 3. The Celery Worker & Beat (using Docker)
   - type: worker
     name: worker
     env: docker
-    plan: free            # 512 MB, **never sleeps**
+    plan: free
     dockerfilePath: ./Dockerfile
-    # 1 container runs both worker + beat – still counts as 1 free service
-    startCommand: >
-      celery -A celery_app.celery_app worker -l info --concurrency=4 -B --scheduler celery.beat.PersistentScheduler --schedule-filename /tmp/celerybeat.db
+    # FIX: Use 'dockerCommand' to override the Dockerfile's CMD for this specific service.
+    # This cleverly runs both the worker and the beat scheduler in one container.
+    dockerCommand: >
+      celery -A celery_app.celery_app worker -l info --concurrency=4 -B --scheduler celery.beat.PersistentScheduler --schedule-filename /tmp/celerybeat-schedule
     envVars:
       - key: CELERY_BROKER_URL
         fromService:
           name: redis
+          type: redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
         fromService:
           name: redis
+          type: redis
           property: connectionString
       - key: REDIS_URL
         fromService:
           name: redis
+          type: redis
           property: connectionString
       - key: USE_BROWSER_COOKIES
         value: false
