@@ -3,13 +3,11 @@ services:
   - type: redis
     name: redis
     plan: free
-    # ✅ FINAL FIX: The ipAllowList contains a list of objects.
-    # The 'source' key is removed, and 'type' and 'name' are the keys of each list item.
+    # ✅ FINAL FIX: For a managed Redis service, the 'source' key expects the
+    # name of the other service as a simple string. This is the correct syntax.
     ipAllowList:
-      - type: service
-        name: api
-      - type: service
-        name: worker
+      - source: api
+      - source: worker
 
   # 2. The FastAPI Web Service (using Docker)
   - type: web
@@ -17,7 +15,7 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    # The Dockerfile's default CMD will correctly start the uvicorn server.
+    # The default CMD from the Dockerfile is used to start the server.
     envVars:
       - key: PORT # Render requires this for web services
         value: 5000
