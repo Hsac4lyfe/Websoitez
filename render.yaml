@@ -1,5 +1,5 @@
 services:
-  # 1. The Redis Instance (Private Service)
+  # 1. The Redis Instance
   - type: pserv
     name: redis
     env: docker
@@ -8,7 +8,7 @@ services:
     plan: free
     autoDeploy: false
 
-  # 2. The FastAPI Backend (Web Service)
+  # 2. The FastAPI Backend
   - type: web
     name: backend
     env: python
@@ -21,7 +21,7 @@ services:
         value: "3.11"
       - key: CLIENT_ORIGIN
         value: "https://your-frontend-url.onrender.com" # Placeholder
-      # ✅ FIX: Define Redis connection details directly in the service.
+      # ✅ CORRECT: Pass the raw host and port to the application
       - key: REDIS_HOST
         fromService:
           type: pserv
@@ -32,14 +32,8 @@ services:
           type: pserv
           name: redis
           property: port
-      - key: CELERY_BROKER_URL
-        value: redis://${REDIS_HOST}:${REDIS_PORT}/0
-      - key: CELERY_RESULT_BACKEND
-        value: redis://${REDIS_HOST}:${REDIS_PORT}/1
-      - key: REDIS_URL
-        value: redis://${REDIS_HOST}:${REDIS_PORT}/0
 
-  # 3. The Celery Worker (Background Worker)
+  # 3. The Celery Worker
   - type: worker
     name: worker
     env: python
@@ -49,7 +43,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-      # ✅ FIX: Repeat the Redis connection details here as well.
+      # ✅ CORRECT: Pass the raw host and port to the application
       - key: REDIS_HOST
         fromService:
           type: pserv
@@ -60,9 +54,3 @@ services:
           type: pserv
           name: redis
           property: port
-      - key: CELERY_BROKER_URL
-        value: redis://${REDIS_HOST}:${REDIS_PORT}/0
-      - key: CELERY_RESULT_BACKEND
-        value: redis://${REDIS_HOST}:${REDIS_PORT}/1
-      - key: REDIS_URL
-        value: redis://${REDIS_HOST}:${REDIS_PORT}/0
