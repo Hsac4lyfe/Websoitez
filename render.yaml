@@ -68,9 +68,9 @@ services:
           name: redis
           property: connectionString
 
-# 4. The Celery Beat Replacement (Cron Job)
-# This runs the cookie refresh task on a schedule without needing a service to be running 24/7.
-cronJobs:
+# ✅ FIX: The correct top-level key is "cron", not "cronJobs".
+cron:
+  # This runs the cookie refresh task on a schedule without needing a service to be running 24/7.
   - name: beat-cookie-refresh
     schedule: "0 */12 * * *" # Runs every 12 hours
     command: celery -A celery_app.celery_app call celery_app.refresh_cookies_task
