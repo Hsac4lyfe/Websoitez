@@ -3,11 +3,10 @@ services:
   - type: redis
     name: redis
     plan: free
-    # ✅ FINAL FIX: The ipAllowList is mandatory. We provide a CIDR block
-    # that allows all connections from within Render's private network,
-    # which is where our api and worker services live.
+    # ✅ FINAL, CORRECT SYNTAX: The ipAllowList is a list of STRINGS.
+    # Each string must be a valid CIDR block. This is the correct format.
     ipAllowList:
-      - cidr: 0.0.0.0/0
+      - 0.0.0.0/0
 
   # 2. The FastAPI Web Service (using Docker)
   - type: web
