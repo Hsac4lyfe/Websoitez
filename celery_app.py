@@ -10,45 +10,30 @@ from celery import Celery
 from celery.schedules import crontab
 from tenacity import retry, stop_after_attempt, wait_fixed, RetryError
 
-# ==============================================================================
-# ✅ RENDER DEPLOYMENT CHANGE: Dynamically build Redis URLs
-# This block checks if it's running on Render by looking for REDIS_HOST.
-# If it is, it builds the connection URLs. Otherwise, it uses the .env variables for local Docker.
-# ==============================================================================
-redis_host = os.getenv("REDIS_HOST")
-redis_port = os.getenv("REDIS_PORT")
-
-if redis_host and redis_port:
-    # We are on Render, build the URLs
-    broker_url = f"redis://{redis_host}:{redis_port}/0"
-    backend_url = f"redis://{redis_host}:{redis_port}/1"
-    redis_lock_url = f"redis://{redis_host}:{redis_port}/0"
-    print("✅ Detected Render environment. Building Redis URLs from HOST and PORT.")
-else:
-    # We are not on Render (e.g., local Docker), use variables from .env
-    broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
-    backend_url = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
-    redis_lock_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    print("✅ Using Redis URLs from environment variables for local development.")
-# ==============================================================================
-
-
 # -------------------------
-# Celery setup
+# Celery setup - Simple version, reads full URLs from environment
 # -------------------------
 celery_app = Celery(
     "celery_app",
-    broker=broker_url,
-    backend=backend_url,
+    broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"),
+    backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1"),
 )
 
 celery_app.conf.worker_prefetch_multiplier = 1
 
+# This is now handled by the worker's start command in render.yaml
+COOKIE_REFRESH_HOURS = int(os.getenv("COOKIE_REFRESH_HOURS", "12"))
+celery_app.conf.beat_schedule = {
+    "refresh-cookies-every-12h": {
+        "task": "refresh_cookies_task",
+        "schedule": crontab(minute=0, hour=f"*/{COOKIE_REFRESH_HOURS}"),
+    },
+}
 
 # -------------------------
 # Redis and Locking
 # -------------------------
-redis_client = redis.from_url(redis_lock_url)
+redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 COOKIE_LOCK = "cookie_refresh_lock"
 
 # -------------------------
@@ -75,11 +60,13 @@ FFMPEG_PATH = shutil.which("ffmpeg") or "/usr/bin/ffmpeg"
 COOKIES_FILE = "cookies.txt"
 USE_BROWSER_COOKIES = os.getenv("USE_BROWSER_COOKIES", "true").lower() == "true"
 BROWSER_NAME = os.getenv("BROWSER_NAME", "edge")
-COOKIE_REFRESH_HOURS = int(os.getenv("COOKIE_REFRESH_HOURS", "12"))
 
 def refresh_cookies() -> None:
-    """Refresh cookies.txt automatically using yt-dlp, with a lock."""
+    if not USE_BROWSER_COOKIES:
+        print("Cookie refresh skipped: USE_BROWSER_COOKIES is false.")
+        return
     print("🔄 Attempting to refresh cookies.txt...")
+    # ... rest of the function is the same ...
     try:
         with redis_client.lock(COOKIE_LOCK, timeout=60):
             print("Acquired lock, refreshing cookies...")
@@ -99,18 +86,14 @@ def refresh_cookies() -> None:
 
 
 def ensure_cookies() -> str | None:
-    """Ensure cookies.txt exists and is not older than the configured refresh hours."""
     if not USE_BROWSER_COOKIES:
         return None
-
     if not os.path.exists(COOKIES_FILE) or (time.time() - os.path.getmtime(COOKIES_FILE)) > (COOKIE_REFRESH_HOURS * 3600):
         refresh_cookies()
-
     return COOKIES_FILE if os.path.exists(COOKIES_FILE) else None
 
-# -------------------------
-# Helpers
-# -------------------------
+# ... all other helper functions (download_audio, etc.) and the transcribe_task remain exactly the same ...
+
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def download_audio(url: str) -> str:
     """Download audio using yt-dlp and return path to WAV file (with retries)."""
@@ -165,9 +148,6 @@ def cleanup_temp_dir_by_audio(audio_path: str) -> None:
     except Exception as e:
         print(f"Failed to cleanup temp dir: {e}")
 
-# -------------------------
-# Celery Tasks
-# -------------------------
 def build_whisper_cmd(audio_path: str, out_base_path: str, fmt: str) -> list[str]:
     """Compose whisper-cli command list securely."""
     opts = {
