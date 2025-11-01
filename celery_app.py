@@ -10,30 +10,45 @@ from celery import Celery
 from celery.schedules import crontab
 from tenacity import retry, stop_after_attempt, wait_fixed, RetryError
 
+# ==============================================================================
+# ✅ RENDER DEPLOYMENT CHANGE: Dynamically build Redis URLs
+# This block checks if it's running on Render by looking for REDIS_HOST.
+# If it is, it builds the connection URLs. Otherwise, it uses the .env variables for local Docker.
+# ==============================================================================
+redis_host = os.getenv("REDIS_HOST")
+redis_port = os.getenv("REDIS_PORT")
+
+if redis_host and redis_port:
+    # We are on Render, build the URLs
+    broker_url = f"redis://{redis_host}:{redis_port}/0"
+    backend_url = f"redis://{redis_host}:{redis_port}/1"
+    redis_lock_url = f"redis://{redis_host}:{redis_port}/0"
+    print("✅ Detected Render environment. Building Redis URLs from HOST and PORT.")
+else:
+    # We are not on Render (e.g., local Docker), use variables from .env
+    broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    backend_url = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+    redis_lock_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    print("✅ Using Redis URLs from environment variables for local development.")
+# ==============================================================================
+
+
 # -------------------------
 # Celery setup
 # -------------------------
 celery_app = Celery(
     "celery_app",
-    broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"),
-    backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1"),
+    broker=broker_url,
+    backend=backend_url,
 )
 
 celery_app.conf.worker_prefetch_multiplier = 1
 
-# Celery Beat config (schedules)
-COOKIE_REFRESH_HOURS = int(os.getenv("COOKIE_REFRESH_HOURS", "12"))
-celery_app.conf.beat_schedule = {
-    "refresh-cookies-every-12h": {
-        "task": "refresh_cookies_task",
-        "schedule": crontab(minute=0, hour=f"*/{COOKIE_REFRESH_HOURS}"),
-    },
-}
 
 # -------------------------
 # Redis and Locking
 # -------------------------
-redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+redis_client = redis.from_url(redis_lock_url)
 COOKIE_LOCK = "cookie_refresh_lock"
 
 # -------------------------
@@ -60,7 +75,7 @@ FFMPEG_PATH = shutil.which("ffmpeg") or "/usr/bin/ffmpeg"
 COOKIES_FILE = "cookies.txt"
 USE_BROWSER_COOKIES = os.getenv("USE_BROWSER_COOKIES", "true").lower() == "true"
 BROWSER_NAME = os.getenv("BROWSER_NAME", "edge")
-
+COOKIE_REFRESH_HOURS = int(os.getenv("COOKIE_REFRESH_HOURS", "12"))
 
 def refresh_cookies() -> None:
     """Refresh cookies.txt automatically using yt-dlp, with a lock."""
@@ -124,7 +139,6 @@ def download_audio(url: str) -> str:
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        # Construct the expected wav filename
         filename = ydl.prepare_filename(info)
         wav_filename = f"{os.path.splitext(filename)[0]}.wav"
         if os.path.exists(wav_filename):
@@ -159,7 +173,6 @@ def build_whisper_cmd(audio_path: str, out_base_path: str, fmt: str) -> list[str
     opts = {
         "--model": WHISPER_CONFIG["model_path"],
         "--threads": str(WHISPER_CONFIG["threads"]),
-        # ✅ FIX: Use the base path for the output file flag
         "--output-file": out_base_path,
         "--language": WHISPER_CONFIG["language"] or None,
         "--max-context": WHISPER_CONFIG["max_context"] or None,
@@ -167,7 +180,6 @@ def build_whisper_cmd(audio_path: str, out_base_path: str, fmt: str) -> list[str
         "--best-of": WHISPER_CONFIG["best_of"] or None,
         "--beam-size": WHISPER_CONFIG["beam_size"] or None,
     }
-    # Use shlex.quote for security, but join the command for subprocess.run with shell=True
     cmd = [shlex.quote(WHISPER_CONFIG["cli_path"])]
     for k, v in opts.items():
         if v is not None and str(v) != "0" and v != "":
@@ -209,37 +221,26 @@ def transcribe_task(self, url: str, format: str = "plain") -> str:
 
         self.update_state(state="PROGRESS", meta={"step": "transcribing", "progress": 50})
 
-        # ✅ FIX: Define a base path WITHOUT an extension.
         output_base_path = os.path.splitext(audio_path)[0]
-
-        # Build CLI command
         cmd = build_whisper_cmd(audio_path, output_base_path, format)
 
         print("Running whisper-cli:", " ".join(cmd))
-        # shell=True is needed because shlex.quote adds shell-specific quoting
         proc = subprocess.run(" ".join(cmd), capture_output=True, text=True, check=True, shell=True)
         
         self.update_state(state="PROGRESS", meta={"step": "finalizing", "progress": 90})
         
-        # ✅ FIX: Construct the final, correct transcript path AFTER running the command
         file_extension = "txt" if format == "plain" else "srt"
         transcript_file_path = f"{output_base_path}.{file_extension}"
 
         if not os.path.exists(transcript_file_path):
-            # This will now correctly raise an error if the file isn't where we expect it
             raise FileNotFoundError(f"Transcript file not found at {transcript_file_path}. Stderr: {proc.stderr}")
 
         with open(transcript_file_path, "r", encoding="utf-8") as fh:
             transcript = fh.read().strip()
 
         return transcript or "No speech detected."
-
-    # ✅ FIX: Simplified exception handling. Let Celery manage the failure state.
-    # This avoids the ValueError and reports the true error (e.g., CalledProcessError) correctly.
     except Exception as e:
-        # Re-raise the exception. Celery will catch it and mark the task as FAILED.
         raise e
-
     finally:
         if audio_path:
             cleanup_temp_dir_by_audio(audio_path)
