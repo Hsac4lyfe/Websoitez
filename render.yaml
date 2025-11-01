@@ -1,9 +1,13 @@
 services:
-  # 1. A Render-Managed Redis Instance.
-  # No ipAllowList is needed for internal service-to-service communication.
+  # 1. A Render-Managed Redis Instance
   - type: redis
     name: redis
     plan: free
+    # ✅ FINAL FIX: The ipAllowList is mandatory. We provide a CIDR block
+    # that allows all connections from within Render's private network,
+    # which is where our api and worker services live.
+    ipAllowList:
+      - cidr: 0.0.0.0/0
 
   # 2. The FastAPI Web Service (using Docker)
   - type: web
