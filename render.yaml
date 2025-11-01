@@ -23,17 +23,20 @@ services:
         fromService:
           type: pserv
           name: redis
-          property: connectionString
+          # ✅ FIX: Use the correct property for internal connections
+          property: internalConnectionString
       - key: CELERY_RESULT_BACKEND
         fromService:
           type: pserv
           name: redis
-          property: connectionString
+          # ✅ FIX: Use the correct property for internal connections
+          property: internalConnectionString
       - key: REDIS_URL
         fromService:
           type: pserv
           name: redis
-          property: connectionString
+          # ✅ FIX: Use the correct property for internal connections
+          property: internalConnectionString
       - key: CLIENT_ORIGIN
         value: "https://your-frontend-url.onrender.com" # Placeholder
 
@@ -51,36 +54,20 @@ services:
         fromService:
           type: pserv
           name: redis
-          property: connectionString
+          # ✅ FIX: Use the correct property for internal connections
+          property: internalConnectionString
       - key: CELERY_RESULT_BACKEND
         fromService:
           type: pserv
           name: redis
-          property: connectionString
+          # ✅ FIX: Use the correct property for internal connections
+          property: internalConnectionString
       - key: REDIS_URL
         fromService:
           type: pserv
           name: redis
-          property: connectionString
+          # ✅ FIX: Use the correct property for internal connections
+          property: internalConnectionString
 
-  # ✅ FIX: The cron job is a service with type 'cron', defined INSIDE the 'services' list.
-  - type: cron
-    name: beat-cookie-refresh
-    env: python
-    plan: free
-    schedule: "0 */12 * * *" # Runs every 12 hours
-    buildCommand: pip install -r requirements.txt
-    startCommand: celery -A celery_app.celery_app call celery_app.refresh_cookies_task
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11"
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: pserv
-          name: redis
-          property: connectionString
-      - key: CELERY_RESULT_BACKEND # Needs this to call the task
-        fromService:
-          type: pserv
-          name: redis
-          property: connectionString
+# ✅ FIX: Removed the entire cron job definition as it does not have a free plan.
+# The cookie refresh logic will now run on-demand, which works perfectly.
