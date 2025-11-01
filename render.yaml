@@ -3,15 +3,13 @@ services:
   - type: redis
     name: redis
     plan: free
-    # ✅ FIX: Correct the syntax for the IP Allow List.
-    # 'source' is the correct key, and 'type' and 'name' are at the same level.
+    # ✅ FINAL FIX: The ipAllowList contains a list of objects.
+    # The 'source' key is removed, and 'type' and 'name' are the keys of each list item.
     ipAllowList:
-      - source:
-          type: service
-          name: api
-      - source:
-          type: service
-          name: worker
+      - type: service
+        name: api
+      - type: service
+        name: worker
 
   # 2. The FastAPI Web Service (using Docker)
   - type: web
