@@ -1,16 +1,14 @@
 services:
   # 1. The Redis Instance (Private Service)
-  # This provides the message broker and result backend for Celery.
   - type: pserv
     name: redis
     env: docker
     image:
       url: redis:7
     plan: free
-    autoDeploy: false # No need to redeploy redis on code changes
+    autoDeploy: false
 
   # 2. The FastAPI Backend (Web Service)
-  # This is the public-facing API that the frontend talks to.
   - type: web
     name: backend
     env: python
@@ -31,24 +29,21 @@ services:
           type: pserv
           name: redis
           property: connectionString
-      - key: REDIS_URL # For the cookie lock in celery_app.py
+      - key: REDIS_URL
         fromService:
           type: pserv
           name: redis
           property: connectionString
-      # IMPORTANT: You will set this manually in the Render Dashboard
-      # after you deploy your frontend static site.
       - key: CLIENT_ORIGIN
-        value: "https://your-frontend-url.onrender.com"
+        value: "https://your-frontend-url.onrender.com" # Placeholder
 
   # 3. The Celery Worker (Background Worker)
-  # This service does the actual work of downloading and transcribing videos.
   - type: worker
     name: worker
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: celery -A celery_app.celery_app worker -l info --concurrency=4 # Lower concurrency for free tier
+    startCommand: celery -A celery_app.celery_app worker -l info --concurrency=4
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
@@ -68,9 +63,24 @@ services:
           name: redis
           property: connectionString
 
-# ✅ FIX: The correct top-level key is "cron", not "cronJobs".
-cron:
-  # This runs the cookie refresh task on a schedule without needing a service to be running 24/7.
-  - name: beat-cookie-refresh
+  # ✅ FIX: The cron job is a service with type 'cron', defined INSIDE the 'services' list.
+  - type: cron
+    name: beat-cookie-refresh
+    env: python
+    plan: free
     schedule: "0 */12 * * *" # Runs every 12 hours
-    command: celery -A celery_app.celery_app call celery_app.refresh_cookies_task
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A celery_app.celery_app call celery_app.refresh_cookies_task
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: pserv
+          name: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND # Needs this to call the task
+        fromService:
+          type: pserv
+          name: redis
+          property: connectionString
