@@ -1,56 +1,63 @@
+# render.yaml
 services:
-  # 1. The Redis Instance
-  - type: pserv
+  - type: redis
     name: redis
-    env: docker
-    image:
-      url: redis:7
-    plan: free
-    autoDeploy: false
+    plan: free          # 25 MB, 0 $
 
-  # 2. The FastAPI Backend
   - type: web
-    name: backend
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
+    name: api
+    env: docker
+    plan: free          # sleeps after 15 min
+    dockerfilePath: ./Dockerfile
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11"
+      - key: PORT
+        value: 5000
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: redis
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: redis
+          property: connectionString
+      - key: USE_BROWSER_COOKIES
+        value: false        # no browser in container
+      - key: WHISPER_THREADS
+        value: 1            # 512 MB RAM limit
+      - key: MAX_CONCURRENT
+        value: 4
       - key: CLIENT_ORIGIN
-        value: "https://your-frontend-url.onrender.com" # Placeholder
-      # ✅ CORRECT: Pass the raw host and port to the application
-      - key: REDIS_HOST
-        fromService:
-          type: pserv
-          name: redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: pserv
-          name: redis
-          property: port
+        value: "*"          # lock later if you add a front-end
 
-  # 3. The Celery Worker
   - type: worker
     name: worker
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: celery -A celery_app.celery_app worker -l info --concurrency=4
+    env: docker
+    plan: free            # 512 MB, **never sleeps**
+    dockerfilePath: ./Dockerfile
+    # 1 container runs both worker + beat – still counts as 1 free service
+    startCommand: >
+      celery -A celery_app.celery_app worker -l info --concurrency=4 -B --scheduler celery.beat.PersistentScheduler --schedule-filename /tmp/celerybeat.db
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11"
-      # ✅ CORRECT: Pass the raw host and port to the application
-      - key: REDIS_HOST
+      - key: CELERY_BROKER_URL
         fromService:
-          type: pserv
           name: redis
-          property: host
-      - key: REDIS_PORT
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
         fromService:
-          type: pserv
           name: redis
-          property: port
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: redis
+          property: connectionString
+      - key: USE_BROWSER_COOKIES
+        value: false
+      - key: WHISPER_THREADS
+        value: 1
+      - key: MAX_CONCURRENT
+        value: 4
