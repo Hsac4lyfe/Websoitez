@@ -6,24 +6,21 @@
 # -------------------------
 # Stage 1: Builder (compile whisper.cpp + install Python deps)
 # -------------------------
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    PATH=/home/appuser/.local/bin:$PATH \
-    WHISPER_MODEL_PATH=/app/whisper.cpp/models/ggml-tiny.en-q8_0.bin \
-    WHISPER_CLI_PATH=/usr/local/bin/whisper-cli
+    # Correct path for the non-root user's home directory
+    PATH=/home/appuser/.local/bin:$PATH
 
-# ✅ FINAL FIX: Add a harmless comment to force a clean rebuild on Railway.
-# This comment invalidates the cache and ensures the libraries below are installed.
-# Version: 2
-
-# Install runtime deps (including whisper.cpp dependencies) and create non-root user
+# Install build tools and create a non-root user
+# This is done as root (the default user)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
+    build-essential \
+    cmake \
+    git \
     curl \
     wget \
-    libstdc++6 \
-    libgomp1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd --no-log-init -r -g appuser -m -d /home/appuser appuser
 
@@ -59,6 +56,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WHISPER_MODEL_PATH=/app/whisper.cpp/models/ggml-tiny.en-q8_0.bin \
     WHISPER_CLI_PATH=/usr/local/bin/whisper-cli
 
+# ✅ FINAL FIX: Add a harmless comment to force a clean rebuild on Railway.
+# This comment invalidates the cache and ensures the libraries below are installed.
+# Version: 2
+
 # Install runtime deps (including whisper.cpp dependencies) and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -76,6 +77,7 @@ WORKDIR /app
 # This allows the user to create files like the celerybeat-schedule db.
 RUN chown appuser:appuser /app
 
+# ✅ CORRECTION: The --from=builder flag correctly references the nickname from Stage 1.
 # Copy Python packages installed in builder and set ownership
 COPY --from=builder --chown=appuser:appuser /home/appuser/.local /home/appuser/.local
 
@@ -109,4 +111,3 @@ EXPOSE 5000
 
 # Default command (will run as 'appuser')
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
-
