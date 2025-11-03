@@ -56,11 +56,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WHISPER_MODEL_PATH=/app/whisper.cpp/models/ggml-tiny.en-q8_0.bin \
     WHISPER_CLI_PATH=/usr/local/bin/whisper-cli
 
-# Install runtime deps and create non-root user
+# Install runtime deps (including whisper.cpp dependencies) and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     wget \
+    libstdc++6 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd --no-log-init -r -g appuser -m -d /home/appuser appuser
 
