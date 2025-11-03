@@ -6,21 +6,24 @@
 # -------------------------
 # Stage 1: Builder (compile whisper.cpp + install Python deps)
 # -------------------------
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    # Correct path for the non-root user's home directory
-    PATH=/home/appuser/.local/bin:$PATH
+    PATH=/home/appuser/.local/bin:$PATH \
+    WHISPER_MODEL_PATH=/app/whisper.cpp/models/ggml-tiny.en-q8_0.bin \
+    WHISPER_CLI_PATH=/usr/local/bin/whisper-cli
 
-# Install build tools and create a non-root user
-# This is done as root (the default user)
+# ✅ FINAL FIX: Add a harmless comment to force a clean rebuild on Railway.
+# This comment invalidates the cache and ensures the libraries below are installed.
+# Version: 2
+
+# Install runtime deps (including whisper.cpp dependencies) and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    git \
+    ffmpeg \
     curl \
     wget \
-    ffmpeg \
+    libstdc++6 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd --no-log-init -r -g appuser -m -d /home/appuser appuser
 
@@ -106,3 +109,4 @@ EXPOSE 5000
 
 # Default command (will run as 'appuser')
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+
