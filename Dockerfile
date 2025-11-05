@@ -51,18 +51,21 @@ RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /app/whisper
 # -------------------------
 FROM python:3.11-slim
 
+# ✅ FINAL FIX: Add the library path so whisper-cli can find its components.
 ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/home/appuser/.local/bin:$PATH \
     WHISPER_MODEL_PATH=/app/whisper.cpp/models/ggml-tiny.en-q8_0.bin \
-    WHISPER_CLI_PATH=/usr/local/bin/whisper-cli
+    WHISPER_CLI_PATH=/usr/local/bin/whisper-cli \
+    LD_LIBRARY_PATH=/app/whisper.cpp/build/lib
 
-# Install runtime deps (including whisper.cpp dependencies) and create non-root user
+# Add a nudge comment to force a clean rebuild on Railway.
+# Version: 4
+
+# Install runtime deps and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     wget \
-    libstdc++6 \
-    libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd --no-log-init -r -g appuser -m -d /home/appuser appuser
 
@@ -70,7 +73,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Change the ownership of the working directory to the appuser
-# This allows the user to create files like the celerybeat-schedule db.
 RUN chown appuser:appuser /app
 
 # Copy Python packages installed in builder and set ownership
@@ -89,10 +91,6 @@ RUN mkdir -p /app/whisper.cpp/models && \
     wget -q -O ${WHISPER_MODEL_PATH} \
       https://huggingface.co/ggml-org/whisper.cpp/resolve/main/ggml-tiny.en-q8_0.bin || \
     (echo "WARNING: failed to download model; continue without model" >&2)
-
-# ✅ FINAL FIX: Add a new comment to force Railway to re-download the latest yt-dlp.
-# This invalidates the build cache for this specific step.
-# YT-DLP Version: 3
 
 # Always use latest yt-dlp
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
