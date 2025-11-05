@@ -43,7 +43,9 @@ USER root
 RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /app/whisper.cpp && \
     cd /app/whisper.cpp && \
     rm -rf build && mkdir -p build && \
-    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON && \
+    # ✅ FINAL, CORRECT FIX: Build a self-contained, static executable.
+    # This removes the need for any external library "bolts".
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF && \
     cmake --build build --config Release -j$(nproc)
 
 # -------------------------
@@ -51,17 +53,15 @@ RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /app/whisper
 # -------------------------
 FROM python:3.11-slim
 
-# ✅ FINAL FIX: Add the library path so whisper-cli can find its components.
 ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/home/appuser/.local/bin:$PATH \
     WHISPER_MODEL_PATH=/app/whisper.cpp/models/ggml-tiny.en-q8_0.bin \
-    WHISPER_CLI_PATH=/usr/local/bin/whisper-cli \
-    LD_LIBRARY_PATH=/app/whisper.cpp/build/lib
+    WHISPER_CLI_PATH=/usr/local/bin/whisper-cli
 
 # Add a nudge comment to force a clean rebuild on Railway.
-# Version: 4
+# Version: 5
 
-# Install runtime deps and create non-root user
+# Install only the absolute essential runtime deps and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
@@ -78,15 +78,16 @@ RUN chown appuser:appuser /app
 # Copy Python packages installed in builder and set ownership
 COPY --from=builder --chown=appuser:appuser /home/appuser/.local /home/appuser/.local
 
-# Copy whisper.cpp artefacts (models + binary)
-COPY --from=builder /app/whisper.cpp /app/whisper.cpp
+# Copy only the self-contained whisper-cli binary and its models.
+# We no longer need the rest of the build artifacts.
+COPY --from=builder /app/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=builder /app/whisper.cpp/models /app/whisper.cpp/models
 
 # Put the binary on the system PATH once, for backend/worker/beat
-RUN cp /app/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli && \
-    chmod +x /usr/local/bin/whisper-cli && \
+RUN chmod +x /usr/local/bin/whisper-cli && \
     ln -sf /usr/local/bin/whisper-cli /usr/local/bin/whisper
 
-# Download a small default model
+# Download a small default model (if not already copied)
 RUN mkdir -p /app/whisper.cpp/models && \
     wget -q -O ${WHISPER_MODEL_PATH} \
       https://huggingface.co/ggml-org/whisper.cpp/resolve/main/ggml-tiny.en-q8_0.bin || \
