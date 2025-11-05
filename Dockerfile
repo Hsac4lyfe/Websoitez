@@ -40,7 +40,7 @@ RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /app/whisper
 # ✅ FINAL, CORRECT FIX: Download the model file reliably here in the builder stage.
 RUN mkdir -p /app/whisper.cpp/models && \
     wget -q -O /app/whisper.cpp/models/ggml-tiny.en-q8_0.bin \
-      https://huggingface.co/ggml-org/whisper.cpp/resolve/main/ggml-tiny.en-q8_0.bin
+      https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-tiny.en-q8_0.bin
 
 # -------------------------
 # Stage 2: Runtime image (smaller)
@@ -88,3 +88,4 @@ COPY --chown=appuser:appuser . .
 USER appuser
 EXPOSE 5000
 CMD ["uvicorn", "main.app", "--host", "0.0.0.0", "--port", "5000"]
+
