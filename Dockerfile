@@ -56,10 +56,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WHISPER_MODEL_PATH=/app/whisper.cpp/models/ggml-tiny.en-q8_0.bin \
     WHISPER_CLI_PATH=/usr/local/bin/whisper-cli
 
-# ✅ FINAL FIX: Add a harmless comment to force a clean rebuild on Railway.
-# This comment invalidates the cache and ensures the libraries below are installed.
-# Version: 2
-
 # Install runtime deps (including whisper.cpp dependencies) and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -77,7 +73,6 @@ WORKDIR /app
 # This allows the user to create files like the celerybeat-schedule db.
 RUN chown appuser:appuser /app
 
-# ✅ CORRECTION: The --from=builder flag correctly references the nickname from Stage 1.
 # Copy Python packages installed in builder and set ownership
 COPY --from=builder --chown=appuser:appuser /home/appuser/.local /home/appuser/.local
 
@@ -94,6 +89,10 @@ RUN mkdir -p /app/whisper.cpp/models && \
     wget -q -O ${WHISPER_MODEL_PATH} \
       https://huggingface.co/ggml-org/whisper.cpp/resolve/main/ggml-tiny.en-q8_0.bin || \
     (echo "WARNING: failed to download model; continue without model" >&2)
+
+# ✅ FINAL FIX: Add a new comment to force Railway to re-download the latest yt-dlp.
+# This invalidates the build cache for this specific step.
+# YT-DLP Version: 3
 
 # Always use latest yt-dlp
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
