@@ -26,15 +26,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Shorts2Text Transcriber", lifespan=lifespan)
 
 # ==============================================================================
-#  CORS – same as before
+#  CORS – updated to include both frontend domains
 # ==============================================================================
 CLIENT_ORIGIN = os.getenv("CLIENT_ORIGIN", "*")
+ADVERTISE_ORIGIN = os.getenv("ADVERTISE_ORIGIN", "https://websoitez-frontend.vercel.app")  # Update this to your Vercel domain for advertise.html
+
 if CLIENT_ORIGIN == "*":
     logger.warning("CLIENT_ORIGIN is not set. Allowing all origins (OK for local dev).")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[CLIENT_ORIGIN] if CLIENT_ORIGIN != "*" else ["*"],
+    allow_origins=[CLIENT_ORIGIN, ADVERTISE_ORIGIN] if CLIENT_ORIGIN != "*" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,7 +87,7 @@ async def get_result(task_id: str) -> dict[str, Any]:
                 "progress": meta.get("progress", 0),
                 "step": meta.get("step", "working"),
             }
-        elif result.state == "SUCCESS":
+        elif result.state == "UCCESS":
             return {
                 "status": "completed",
                 "progress": 100,
