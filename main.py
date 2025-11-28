@@ -28,15 +28,13 @@ app = FastAPI(title="Shorts2Text Transcriber", lifespan=lifespan)
 # ==============================================================================
 #  CORS – updated to include both frontend domains
 # ==============================================================================
-CLIENT_ORIGIN = os.getenv("CLIENT_ORIGIN", "*")
-ADVERTISE_ORIGIN = os.getenv("ADVERTISE_ORIGIN", "https://websoitez-frontend.vercel.app")  # Update this to your Vercel domain for advertise.html
-
+CLIENT_ORIGIN = os.getenv("CLIENT_ORIGIN", "https://websoitez-frontend.vercel.app")
 if CLIENT_ORIGIN == "*":
     logger.warning("CLIENT_ORIGIN is not set. Allowing all origins (OK for local dev).")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[CLIENT_ORIGIN, ADVERTISE_ORIGIN] if CLIENT_ORIGIN != "*" else ["*"],
+    allow_origins=[CLIENT_ORIGIN],  # Only allow requests from your frontend domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -123,8 +121,8 @@ async def advertise_inquiry(payload: AdInquiry) -> dict[str, str]:
     Receives ad-space inquiry and forwards it to your inbox
     plus an auto-reply chatbot address.
     """
-    our_email = os.getenv("AD_EMAIL", "your-ads-email@example.com")
-    bot_email = os.getenv("BOT_EMAIL", "chatbot@example.com")
+    our_email = os.getenv("AD_EMAIL", "kijifujiwara0205@proton.me")
+    bot_email = os.getenv("BOT_EMAIL", "kijifujiwara0205@proton.me")
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", 587))
     smtp_user = os.getenv("SMTP_USER")
