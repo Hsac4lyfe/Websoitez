@@ -126,7 +126,7 @@ async def advertise_inquiry(payload: AdInquiry) -> dict[str, str]:
     our_email = os.getenv("AD_EMAIL", "kijifujiwara0205@proton.me")
     bot_email = os.getenv("BOT_EMAIL", "kijifujiwara0205@proton.me")
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    smtp_port = int(os.getenv("SMTP_PORT", 465))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
 
@@ -139,8 +139,7 @@ async def advertise_inquiry(payload: AdInquiry) -> dict[str, str]:
         msg["From"] = smtp_user
         msg["To"] = to_addr
         msg.set_content(body)
-        with smtplib.SMTP(smtp_host, smtp_port) as s:
-            s.starttls()
+        with smtplib.SMTP_SSL(smtp_host, smtp_port) as s:
             s.login(smtp_user, smtp_pass)
             s.send_message(msg)
 
@@ -159,4 +158,5 @@ async def advertise_inquiry(payload: AdInquiry) -> dict[str, str]:
     )
 
     return {"status": "sent"}
+
 
