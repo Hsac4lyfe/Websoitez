@@ -65,8 +65,8 @@ async def get_result(task_id: str) -> dict[str, Any]:
         if result.state == "PENDING":
             return {"status": "pending", "progress": 0, "step": "queued"}
         if result.state == "PROGRESS":
-            meta = result.info or {}
-            return {"status": "processing", "progress": meta.get("progress", 0), "step": meta.get("step", "working")}
+            meta = result.info if isinstance(result.info, dict) else {}
+            return {"status": "processing","progress": meta.get("progress", 0),"step": meta.get("step", "working")}
         if result.state == "SUCCESS":
             return {"status": "completed", "progress": 100, "step": "done", "transcript": result.get()}
         if result.state == "FAILURE":
@@ -80,3 +80,4 @@ async def get_result(task_id: str) -> dict[str, Any]:
 @app.get("/")
 def root():
     return {"status": "ok"}
+
